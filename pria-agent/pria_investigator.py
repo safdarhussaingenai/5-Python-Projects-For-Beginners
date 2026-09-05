@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
-
+import os
+import re
 import requests
 
 
@@ -11,10 +12,84 @@ PR_NUMBER = 1
 BASE_URL = f"https://api.github.com/repos/{OWNER}/{REPO}"
 
 
+def get_headers():
+    headers = {
+        "Accept": "application/vnd.github+json"
+    }
+
+    token = os.getenv("GITHUB_TOKEN")
+
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    return headers
+
+
 def github_get(url, params=None):
-    response = requests.get(url, params=params, timeout=30)
+    response = requests.get(
+        url,
+        params=params,
+        headers=get_headers(),
+        timeout=30
+    )
+
     response.raise_for_status()
     return response.json()
+
+def get_failed_job(run_id):
+    url = f"{BASE_URL}/actions/runs/{run_id}/jobs"
+
+    data = github_get(url)
+
+    for job in data.get("jobs", []):
+        if job.get("conclusion") == "failure":
+            return job
+
+    return None
+
+
+def get_job_logs(job_id):
+    url = f"{BASE_URL}/actions/jobs/{job_id}/logs"
+
+    response = requests.get(
+        url,
+        headers=get_headers(),
+        timeout=30
+    )
+
+    response.raise_for_status()
+
+    return response.text
+
+def parse_failed_test(log_text):
+    failed_test = {
+        "name": None,
+        "expected": None,
+        "actual": None
+    }
+
+    # Example:
+    # FAILED test_subscription.py::test_create_subscription_returns_201
+    test_match = re.search(
+        r"FAILED\s+.*::([A-Za-z0-9_]+)",
+        log_text
+    )
+
+    if test_match:
+        failed_test["name"] = test_match.group(1)
+
+    # pytest normally shows:
+    # assert 400 == 201
+    assertion_match = re.search(
+        r"assert\s+(\d+)\s*==\s*(\d+)",
+        log_text
+    )
+
+    if assertion_match:
+        failed_test["actual"] = int(assertion_match.group(1))
+        failed_test["expected"] = int(assertion_match.group(2))
+
+    return failed_test
 
 
 def get_pull_request():
@@ -48,6 +123,21 @@ def get_failed_regression_run(workflow_runs):
 
 
 def create_evidence():
+    failed_run = get_failed_regression_run(workflow_runs)
+    failed_test = {
+    "name": None,
+    "expected": None,
+    "actual": None
+}
+
+failed_job = None
+
+if failed_run:
+    failed_job = get_failed_job(failed_run["id"])
+
+    if failed_job:
+        logs = get_job_logs(failed_job["id"])
+        failed_test = parse_failed_test(logs)
     pr = get_pull_request()
     files = get_changed_files()
     commits = get_commits()
@@ -119,11 +209,7 @@ def create_evidence():
 
         # We will populate these in the NEXT step
         # by reading the failed test logs.
-        "failed_test": {
-            "name": None,
-            "expected": None,
-            "actual": None,
-        },
+       "failed_test": failed_test,
     }
 
     return evidence
