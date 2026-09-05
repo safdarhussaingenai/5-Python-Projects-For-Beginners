@@ -1,8 +1,4 @@
 def create_subscription(request):
-    """
-    Demo subscription creation with partner validation.
-    """
-
     if "partner_id" not in request:
         return {
             "status_code": 400,
