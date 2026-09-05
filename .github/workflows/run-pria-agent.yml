@@ -23,3 +23,9 @@ jobs:
 
       - name: Run PRIA Investigator
         run: python pria-agent/pria_investigator.py
+
+      - name: Upload PRIA evidence
+        uses: actions/upload-artifact@v4
+      with:
+        name: pria-evidence
+        path: pria-agent/pria_evidence.json
