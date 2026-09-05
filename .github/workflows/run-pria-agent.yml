@@ -26,6 +26,6 @@ jobs:
 
       - name: Upload PRIA evidence
         uses: actions/upload-artifact@v4
-      with:
-        name: pria-evidence
-        path: pria-agent/pria_evidence.json
+        with:
+          name: pria-evidence
+          path: pria-agent/pria_evidence.json
