@@ -1,7 +1,10 @@
 def create_subscription(request):
-    """
-    Simple demo of Partner API subscription creation.
-    """
+    if "partner_id" not in request:
+        return {
+            "status_code": 400,
+            "message": "partner_id is required"
+        }
+
     return {
         "status_code": 201,
         "message": "Subscription created successfully"
